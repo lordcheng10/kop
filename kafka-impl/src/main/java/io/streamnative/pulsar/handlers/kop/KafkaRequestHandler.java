@@ -898,12 +898,15 @@ public class KafkaRequestHandler extends KafkaCommandDecoder {
 
     protected void handleProduceRequest(KafkaHeaderAndRequest produceHar,
                                         CompletableFuture<AbstractResponse> resultFuture) {
+        //1.检查请求类型
         checkArgument(produceHar.getRequest() instanceof ProduceRequest);
+        //2.构建producer请求
         ProduceRequest produceRequest = (ProduceRequest) produceHar.getRequest();
-
+        //3.请求中的partition数
         final int numPartitions = produceRequest.partitionRecordsOrFail().size();
-
+        //4.response
         final Map<TopicPartition, PartitionResponse> responseMap = new ConcurrentHashMap<>();
+        //5.延迟producer
         // delay produce
         final AtomicInteger topicPartitionNum = new AtomicInteger(produceRequest.partitionRecordsOrFail().size());
         int timeoutMs = produceRequest.timeout();
@@ -924,6 +927,7 @@ public class KafkaRequestHandler extends KafkaCommandDecoder {
             }
             resultFuture.complete(new ProduceResponse(responseMap));
         };
+        //当一个partition写完后，调用该方法
         BiConsumer<TopicPartition, PartitionResponse> addPartitionResponse = (topicPartition, response) -> {
             responseMap.put(topicPartition, response);
             // reset topicPartitionNum
@@ -936,15 +940,18 @@ public class KafkaRequestHandler extends KafkaCommandDecoder {
             }
         };
 
+        //遍历每个partitoin写入
         produceRequest.partitionRecordsOrFail().forEach((topicPartition, records) -> {
+            //1.这里定义了集中情况下的函数处理方法
             final Consumer<Long> offsetConsumer = offset -> addPartitionResponse.accept(
                     topicPartition, new PartitionResponse(Errors.NONE, offset, -1L, -1L));
             final Consumer<Errors> errorsConsumer =
                     errors -> addPartitionResponse.accept(topicPartition, new PartitionResponse(errors));
             final Consumer<Throwable> exceptionConsumer =
                     e -> addPartitionResponse.accept(topicPartition, new PartitionResponse(Errors.forException(e)));
+            //2.获取KoP全名
             final String fullPartitionName = KopTopic.toString(topicPartition);
-
+            //3.判断是否有权限
             authorize(AclOperation.WRITE, Resource.of(ResourceType.TOPIC, fullPartitionName))
                     .whenComplete((isAuthorized, ex) -> {
                         if (ex != null) {
@@ -988,6 +995,7 @@ public class KafkaRequestHandler extends KafkaCommandDecoder {
                                         final Consumer<Long> offsetConsumer,
                                         final Consumer<Errors> errorsConsumer,
                                         final Consumer<Throwable> exceptionConsumer) {
+        //1.检查是不是内部topic
         // check KOP inner topic
         if (isInternalTopic(fullPartitionName)) {
             log.error("[{}] Request {}: not support produce message to inner topic. topic: {}",
@@ -995,6 +1003,7 @@ public class KafkaRequestHandler extends KafkaCommandDecoder {
             errorsConsumer.accept(Errors.INVALID_TOPIC_EXCEPTION);
             return;
         }
+
 
         try {
             final long beforeRecordsProcess = MathUtils.nowInNano();

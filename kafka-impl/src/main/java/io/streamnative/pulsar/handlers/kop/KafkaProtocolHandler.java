@@ -71,6 +71,7 @@ import org.apache.pulsar.common.util.FutureUtil;
 import org.apache.pulsar.metadata.api.MetadataCache;
 import org.apache.pulsar.policies.data.loadbalancer.LocalBrokerData;
 
+//一切故事就是从这个类开始的，pulsar会通过反射加载到这个类，调用start方法
 /**
  * Kafka Protocol Handler load and run by Pulsar Service.
  */
