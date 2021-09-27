@@ -48,6 +48,7 @@ public class KafkaTopicManager {
     private final LookupClient lookupClient;
     private volatile SocketAddress remoteAddress;
 
+    //TODO-问题：这里也没有清理
     // cache for topics: <topicName, persistentTopic>, for removing producer
     @Getter
     private static final ConcurrentHashMap<String, CompletableFuture<Optional<PersistentTopic>>>
@@ -224,11 +225,21 @@ public class KafkaTopicManager {
                 if (topicNameObject.getPartitionIndex() == 0) {
                     log.warn("Get partition-0 error [{}].", throwable.getMessage());
                 } else {
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                     handleGetTopicException(topicName, topicCompletableFuture, throwable);
                     return;
                 }
             }
             if (t2 != null && t2.isPresent()) {
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
                 topicCompletableFuture.complete(Optional.of((PersistentTopic) t2.get()));
                 return;
             }
@@ -249,11 +260,21 @@ public class KafkaTopicManager {
                     }
                     if (nonPartitionedTopic.isPresent()) {
                         PersistentTopic persistentTopic = (PersistentTopic) nonPartitionedTopic.get();
+                        try {
+                            Thread.sleep(5000);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
                         topicCompletableFuture.complete(Optional.of(persistentTopic));
                     } else {
                         log.error("[{}]Get empty non-partitioned topic for name {}",
                                 requestHandler.ctx.channel(), nonPartitionedTopicName);
                         removeTopicManagerCache(nonPartitionedTopicName);
+                        try {
+                            Thread.sleep(5000);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
                         topicCompletableFuture.complete(Optional.empty());
                     }
                 });
@@ -261,6 +282,11 @@ public class KafkaTopicManager {
             }
             log.error("[{}]Get empty topic for name {}", requestHandler.ctx.channel(), topicName);
             removeTopicManagerCache(topicName);
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
             topicCompletableFuture.complete(Optional.empty());
         });
         // cache for removing producer

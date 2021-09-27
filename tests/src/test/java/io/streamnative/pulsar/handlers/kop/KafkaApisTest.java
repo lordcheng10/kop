@@ -333,6 +333,40 @@ public class KafkaApisTest extends KopProtocolHandlerTestBase {
         assertEquals(listOffsetResponse.responseData().get(tp).timestamp, Long.valueOf(0));
     }
 
+    @Test
+    public void testProduceRequest() throws Exception {
+        String topicName = "test1";
+        admin.topics().createPartitionedTopic(topicName, 1);
+        List<TopicPartition> topicPartitions = new ArrayList<>();
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        topicPartitions.add(tp1);
+
+        KafkaProducer<String, String> kProducer = createKafkaProducer("client1");
+        kProducer.send(
+                        new ProducerRecord<>(
+                                topicName,
+                                0,
+                                "key1 ",
+                                "value1")).get();
+        kProducer.send(
+                new ProducerRecord<>(
+                        topicName,
+                        0,
+                        "key2",
+                        "value2")).get();
+        KafkaConsumer<String, String> consumer = createKafkaConsumer(5000, 1);
+        consumer.assign(topicPartitions);
+        consumer.seekToBeginning(topicPartitions);
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
+        while (records != null) {
+            records.forEach(record -> {
+                System.out.println("chenlin:" + record.key());
+            });
+            records = consumer.poll(Duration.ofMillis(1000));
+        }
+        System.out.println("finished!");
+    }
+
     @Test(timeOut = 60000)
     public void testFetchMaxBytes() throws Exception {
         String topicName = "testMaxBytesTopic";
@@ -668,6 +702,22 @@ public class KafkaApisTest extends KopProtocolHandlerTestBase {
         KafkaProducer<String, String> producer = new KafkaProducer<>(props);
         return producer;
     }
+
+    private KafkaProducer<String, String> createKafkaProducer(String clientId) {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost" + ":" + getKafkaBrokerPort());
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, "FetchRequestTestProducer");
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.LINGER_MS_CONFIG, "0");
+//        props.put(ProducerConfig.BATCH_SIZE_CONFIG, "19");
+//        props.put(ProducerConfig.MAX_REQUEST_SIZE_CONFIG, "100");
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
+
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props);
+        return producer;
+    }
+
 
     private KafkaConsumer<String, String> createKafkaConsumer(int maxWait, int minBytes,
                                                               int maxBytes, int maxPartitionBytes,

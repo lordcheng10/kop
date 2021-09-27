@@ -1050,6 +1050,8 @@ public class KafkaRequestHandler extends KafkaCommandDecoder {
                 publishMessages(persistentTopicOpt, byteBuf, numMessages, validRecords, topicPartition,
                         offsetConsumer, errorsConsumer);
             };
+            System.out.println("before pendingTopicFuturesMap=" + pendingTopicFuturesMap.get(topicPartition) + ",topicFuture=" + topicFuture);
+
             //12.如果异步获取topic完成，那么直接调用persistentTopicConsumer来写数据
             if (topicFuture.isDone()) {
                 persistentTopicConsumer.accept(topicFuture.getNow(Optional.empty()));
@@ -1062,6 +1064,7 @@ public class KafkaRequestHandler extends KafkaCommandDecoder {
                         .computeIfAbsent(topicPartition, ignored ->
                                 new PendingTopicFutures(requestStats))
                         .addListener(topicFuture, persistentTopicConsumer, exceptionConsumer);
+                System.out.println("after pendingTopicFuturesMap=" + pendingTopicFuturesMap.get(topicPartition) + ",topicFuture=" + topicFuture);
             }
         } catch (Exception e) {
             //14.异常处理
