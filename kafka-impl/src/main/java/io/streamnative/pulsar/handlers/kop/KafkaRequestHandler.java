@@ -1553,7 +1553,9 @@ public class KafkaRequestHandler extends KafkaCommandDecoder {
     @Override
     protected void handleOffsetCommitRequest(KafkaHeaderAndRequest offsetCommit,
                                              CompletableFuture<AbstractResponse> resultFuture) {
+        //1.检查offset commit类型
         checkArgument(offsetCommit.getRequest() instanceof OffsetCommitRequest);
+        //2.检查group coordinate状态
         checkState(getGroupCoordinator() != null,
                 "Group Coordinator not started");
 
