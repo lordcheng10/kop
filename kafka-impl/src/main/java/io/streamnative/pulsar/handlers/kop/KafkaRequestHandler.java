@@ -975,10 +975,13 @@ public class KafkaRequestHandler extends KafkaCommandDecoder {
                                 exceptionConsumer);
                     });
         });
+
+        //如果timeout小于0直接返回response
         // delay produce
         if (timeoutMs <= 0) {
             complete.run();
         } else {
+            //否则延迟返回
             List<Object> delayedCreateKeys =
                     produceRequest.partitionRecordsOrFail().keySet().stream()
                             .map(DelayedOperationKey.TopicPartitionOperationKey::new).collect(Collectors.toList());
@@ -1006,13 +1009,19 @@ public class KafkaRequestHandler extends KafkaCommandDecoder {
 
 
         try {
+            //2.处理开始时间
             final long beforeRecordsProcess = MathUtils.nowInNano();
+            //3.解压遍历每条消息进行检查
             final MemoryRecords validRecords =
                     validateRecords(produceHar.getHeader().apiVersion(), topicPartition, records);
+            //4.消息数
             final int numMessages = EntryFormatter.parseNumMessages(validRecords);
+            //5.转成pulsar格式
             final ByteBuf byteBuf = entryFormatter.encode(validRecords, numMessages);
+            //6.metric统计消息处理耗时
             requestStats.getProduceEncodeStats().registerSuccessfulEvent(
                     MathUtils.elapsedNanos(beforeRecordsProcess), TimeUnit.NANOSECONDS);
+            //7.检查是否限速
             startSendOperationForThrottling(byteBuf.readableBytes());
 
             if (log.isDebugEnabled()) {
@@ -1020,9 +1029,10 @@ public class KafkaRequestHandler extends KafkaCommandDecoder {
                                 + "request size: {} ", ctx.channel(), produceHar.getHeader(),
                         topicPartition.topic(), topicPartition.partition(), numPartitions);
             }
-
+            //8.异步获取pulsar topic对应的persisttopic（看起来好像是获取该topic的分布）
             final CompletableFuture<Optional<PersistentTopic>> topicFuture =
                     topicManager.getTopic(fullPartitionName);
+            //9.如果是异常完成的话
             if (topicFuture.isCompletedExceptionally()) {
                 topicFuture.exceptionally(e -> {
                     exceptionConsumer.accept(e);
@@ -1030,19 +1040,23 @@ public class KafkaRequestHandler extends KafkaCommandDecoder {
                 });
                 return;
             }
+            //10.如果topic是完成的，并且没有值的话，那就是没有对应的broker负责
             if (topicFuture.isDone() && !topicFuture.getNow(Optional.empty()).isPresent()) {
                 errorsConsumer.accept(Errors.NOT_LEADER_FOR_PARTITION);
                 return;
             }
-
+            //11.构建一个写数据的consumer函数
             final Consumer<Optional<PersistentTopic>> persistentTopicConsumer = persistentTopicOpt -> {
                 publishMessages(persistentTopicOpt, byteBuf, numMessages, validRecords, topicPartition,
                         offsetConsumer, errorsConsumer);
             };
-
+            //12.如果异步获取topic完成，那么直接调用persistentTopicConsumer来写数据
             if (topicFuture.isDone()) {
                 persistentTopicConsumer.accept(topicFuture.getNow(Optional.empty()));
             } else {
+                //13.如果没有完成的话，就放入pending的map中，好像只是放进去，没有移除动作，不会越来越多呀
+                //TODO-问题1：好像只是放进去，没有移除动作，不会越来越多呀；
+                //TODO-问题2：如果后面该partition写入的请求到达，走到这里的话，由于原来map中存在该key，那不是直接不管了？这里设计是想触发检查前面pendding的request请求是否完成，但之后的请求就不管了？这样会有数据丢失
                 // topic is not available now
                 pendingTopicFuturesMap
                         .computeIfAbsent(topicPartition, ignored ->
@@ -1050,6 +1064,7 @@ public class KafkaRequestHandler extends KafkaCommandDecoder {
                         .addListener(topicFuture, persistentTopicConsumer, exceptionConsumer);
             }
         } catch (Exception e) {
+            //14.异常处理
             log.error("[{}] Failed to handle produce request for {}",
                     ctx.channel(), topicPartition, e);
             exceptionConsumer.accept(e);
