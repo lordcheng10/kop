@@ -48,7 +48,7 @@ public class KafkaTopicManager {
     private final LookupClient lookupClient;
     private volatile SocketAddress remoteAddress;
 
-    //TODO-问题：这里也没有清理
+    //TODO-问题：这里也没有清理，而且topic删除后创建，可能会一些些问题
     // cache for topics: <topicName, persistentTopic>, for removing producer
     @Getter
     private static final ConcurrentHashMap<String, CompletableFuture<Optional<PersistentTopic>>>
