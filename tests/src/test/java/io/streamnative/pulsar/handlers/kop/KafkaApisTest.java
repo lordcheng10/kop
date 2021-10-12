@@ -80,6 +80,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.pulsar.broker.protocol.ProtocolHandler;
 import org.apache.pulsar.common.policies.data.RetentionPolicies;
+import org.apache.pulsar.common.policies.data.TopicStats;
 import org.apache.pulsar.policies.data.loadbalancer.LocalBrokerData;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -394,6 +395,51 @@ public class KafkaApisTest extends KopProtocolHandlerTestBase {
                 assertTrue(fetchPartitionSize2 > maxPartitionBytes);
                 assertTrue(fetchPartitionSize1 + fetchPartitionSize2 > maxBytes);
             }
+        }
+    }
+
+
+
+    @Test(timeOut = 60000)
+    public void testProduceHandle() throws Exception {
+        try{
+            String topicName = "testProduceHandle";
+            TopicPartition tp = new TopicPartition(topicName, 0);
+
+            // create partitioned topic.
+            admin.topics().createPartitionedTopic(topicName, 1);
+            List<TopicPartition> topicPartitions = new ArrayList<>();
+            topicPartitions.add(tp);
+
+            KafkaProducer<String, String> kProducer = createKafkaProducer();
+            kProducer.send(new ProducerRecord<>(tp.topic(), tp.partition(), "k1 ", "1111")).get();
+            admin.topics().deletePartitionedTopic(topicName,true);
+            try{
+                TopicStats topicStats = admin.topics().getStats(topicName);
+            }catch (Exception e){
+                System.out.println(e.getMessage());
+            }
+            admin.topics().createPartitionedTopic(topicName, 1);
+            kProducer.send(new ProducerRecord<>(tp.topic(), tp.partition(), "k2 ", "2222")).get();
+
+            KafkaConsumer<String, String> consumer = createKafkaConsumer(500, 1);
+            consumer.assign(topicPartitions);
+            consumer.seekToBeginning(topicPartitions);
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
+            if(records!=null){
+                records.forEach(record->{
+                    System.out.println("chenlin:key=" + record.key() + ",value=" + record.value());
+                });
+            }
+
+            ConsumerRecords<String, String> records2 = consumer.poll(Duration.ofMillis(500));
+            if(records2!=null){
+                records2.forEach(record->{
+                    System.out.println("chenlin:key=" + record.key() + ",value=" + record.value());
+                });
+            }
+        }catch (Exception e){
+            System.out.println("chenlin=" +e.getMessage());
         }
     }
 
