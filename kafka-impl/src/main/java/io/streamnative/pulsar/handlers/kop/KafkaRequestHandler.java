@@ -2257,6 +2257,7 @@ public class KafkaRequestHandler extends KafkaCommandDecoder {
         }
         CompletableFuture<PartitionMetadata> returnFuture = new CompletableFuture<>();
 
+        //这里topicManager.getTopicBroker(topic.toString()) 会通过lookup来触发load操作，从而触发对应consumer offset的load操作
         topicManager.getTopicBroker(topic.toString())
             .thenCompose(address -> getProtocolDataToAdvertise(address, topic))
             .whenComplete((stringOptional, throwable) -> {
